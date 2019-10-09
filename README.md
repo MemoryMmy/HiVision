@@ -31,15 +31,15 @@ Rapid Visualization of Large-Scale Spatial Vector Data
 
 The datasets (see Tab 1) used in the demonstration are provided by map service providers. As the datasets are not open published, the raw datasets are encrypted by adding offsets. The interface of the demonstration is simple to use, choose a dataset and click the Enter button, then the visualizing results will be added to the map in real time. Fig 1-3 show the visualizing results.
 
-![fig1](D:/github/HiVision/figures/f1.jpg)
+![fig1](./figures/f1.jpg)
 
 *Fig1. China_POI*
 
-![fig2](D:/github/HiVision/figures/f2.jpg)
+![fig2](./figures/f2.jpg)
 
 *Fig2. China_Road*
 
-![fig3](D:/github/HiVision/figures/f3.jpg)
+![fig3](./figures/f3.jpg)
 
 *Fig3. China_Farmland*
 
