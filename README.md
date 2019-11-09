@@ -1,6 +1,4 @@
 # HiVision
-Rapid Visualization of Large-Scale Spatial Vector Data
-
 
 
 ## [Online Demo1](http://www.higis.org.cn:8080/hivision/) 
