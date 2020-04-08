@@ -14,6 +14,7 @@
 #include "crow.h"
 #include "cpl_conv.h"
 #include "cpl_string.h"
+#include "Redis.h"
 #include <stdio.h>
 #include <cstring>
 #include <string>
@@ -31,9 +32,6 @@
 #include <stdlib.h>
 #include <stack>
 #include <signal.h>
-
-
-#include <hiredis/hiredis.h>
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/geometries/box.hpp>
@@ -49,12 +47,8 @@ namespace bgm = boost::geometry::model;
 namespace bi = boost::interprocess;
 
 using namespace std;
-
 #define TILE_SIZE 256
 #define L 20037508.34
-#define MAX_LAYER_NUMBER 10
-#define MAX_OPERATION_NUMBER 32
-
 
 class HiVisionPara
 {
@@ -66,146 +60,9 @@ class HiVisionPara
 	char *redisHost=NULL;
 	int redisPort=6379;
 	int servicePort=10080;
-	
 };
 HiVisionPara hvpara;
 
-class Redis
-{
-	public:
-
-    	Redis(){}
-	
-	~Redis()
-	{
-		this->_connect = NULL;
-		this->_reply = NULL;	    	    
-	}
-
-	bool connect(char * host, int port)
-	{
-		this->_connect = redisConnect(host, port);
-		if (this->_connect != NULL && this->_connect->err)
-		{
-			printf("connect error: %s\n", this->_connect->errstr);
-			return false;
-		}
-		return true;
-	}
-
-    string get(string key)
-	{
-		this->_reply = (redisReply*)redisCommand(this->_connect, "GET %s", key.c_str());
-		
-		if(this->_reply->type == REDIS_REPLY_NIL)
-		{
-			printf("Get Data %s failed\n",key.c_str());
-			return "";
-		}
-		string str = this->_reply->str;
-		freeReplyObject(this->_reply);
-		return str;
-	}
-
-	void set(char * key, char * value)
-	{
-		redisCommand(this->_connect, "SET %s %s", key, value);
-	}
-
-	void zset(string key, char *value, long unsigned int size)
-	{ 
-		const char *v[4];
-		size_t vlen[4];
-		v[0] = (char *)"zadd";
-		vlen[0] = strlen("zadd");
-		v[1] = key.c_str();
-		vlen[1] = strlen(key.c_str());
-		std::stringstream ss;
-		ss << time(0);
-		v[2] = ss.str().c_str();
-		vlen[2] = ss.str().size();
-		v[3] = (const char *)value;
-		vlen[3] = size;
-	    //~ printf("sizeof(v) :%ld sizeof(v[0]) %d\n ",sizeof(v),sizeof(v[0]));
-		redisCommandArgv(this->_connect, sizeof(v) / sizeof(v[0]), v, vlen);
-	}
-	
-	void expire(string key, string time)
-	{
-		printf("expire %s %s\n", key.c_str(), time.c_str());
-		redisCommand(this->_connect, "expire %s %s", key.c_str(), time.c_str());
-	}
-	
-	void pub(string channel, string message)
-	{
-		redisCommand(this->_connect, "publish %s %s", channel.c_str(), message.c_str());
-	}
-	
-	void del(string key)
-	{
-		redisCommand(this->_connect, "del %s", key.c_str());
-	}
-	
-	int getllen(string key)
-	{
-		this->_reply = (redisReply*)redisCommand(this->_connect, "llen %s", key.c_str());
-		int str = this->_reply->integer;
-		freeReplyObject(this->_reply);
-		return str;
-	}
-	
-	string getlindex(string key, int index )
-	{
-		this->_reply = (redisReply*)redisCommand(this->_connect, "lindex %s %d", key.c_str(),index);
-		string str = this->_reply->str;
-		freeReplyObject(this->_reply);
-		return str;
-	}
-	void lpush(string key,string value)
-	{
-		redisCommand(this->_connect, "lpush %s %s", key.c_str(), value.c_str());
-	}
-	
-	string rpop(string key)
-	{
-		this->_reply = (redisReply*)redisCommand(this->_connect, "rpop %s", key.c_str());
-		if(this->_reply->type == REDIS_REPLY_NIL)
-			return "";
-		string str = this->_reply->str;
-		freeReplyObject(this->_reply);
-		return str;
-	}
-	
-	string brpop(string key)
-	{
-		this->_reply = (redisReply*)redisCommand(this->_connect, "brpop %s 0", key.c_str());
-		string str = this->_reply->element[1]->str;
-		freeReplyObject(this->_reply);
-		return str;
-	}
-	
-	bool zget(char *key, char *value)
-	{
-		this->_reply = (redisReply *)redisCommand(this->_connect, "zrange %s 0 -1", key);
-		if (this->_reply->elements<1) 
-			return false;
-		else
-			memcpy(value, this->_reply->element[0]->str, this->_reply->element[0]->len);
-		return true;
-	}
-	
-	void freeredis()
-	{
-		redisFree(this->_connect);
-		//~ freeReplyObject(this->_reply);
-	}
-	
-	private:
-
-    	redisContext* _connect;
-		redisReply* _reply;
-				
-};
 void GetList(char* argv, char* result[], char* flag, int& count)
 {
 	char* string = strdup(argv); 
@@ -219,45 +76,11 @@ void GetList(char* argv, char* result[], char* flag, int& count)
 	result[i] = string;
 	count = i;
 }
-class ServerLogHandler : public crow::ILogHandler {
-    public:
-        void log(std::string /*message*/, crow::LogLevel /*level*/) override {
-//            cerr << "ServerLogHandler -> " << message;
-        }
-};
-struct ServerMiddleware 
-{
-    std::string message;
 
-    ServerMiddleware() 
-    {
-        message = "foo";
-    }
-
-    void setMessage(std::string newMsg)
-    {
-        message = newMsg;
-    }
-
-    struct context
-    {
-		
-    };
-
-    void before_handle(crow::request& /*req*/, crow::response& /*res*/, context& /*ctx*/)
-    {
-        CROW_LOG_DEBUG << " - MESSAGE: " << message;
-    }
-
-    void after_handle(crow::request& /*req*/, crow::response& /*res*/, context& /*ctx*/)
-    {
-        // no-op
-    }
-};
+//Create Spatial Indexes and Write Dataset meta-data for Linestring Datasets
 bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport ,bool ispg=false)
 {
 	typedef bgm::d2::point_xy<double> point;
-	//~ typedef bgm::box<point> box;
 	typedef bgm::segment<point> segment;
 
     struct timeval t1,t2;
@@ -431,6 +254,8 @@ bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,in
 	
     return true;
 }
+
+//Create Spatial Indexes and Write Dataset meta-data for Point Datasets
 bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport  ,bool ispg=false)
 {
 	typedef bgm::d2::point_xy<double> point;
@@ -585,6 +410,8 @@ bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int red
     printf("[DONE] %s Use Time:%f\n", outIndex,timeuse);
     return true;
 }
+
+//Create Spatial Indexes and Write Dataset meta-data for Polygon Datasets
 bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport,bool ispg=false)
 {
 	typedef bgm::d2::point_xy<double> point;
@@ -603,7 +430,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
     typedef bi::allocator<polygon_segment, bi::managed_mapped_file::segment_manager> allocator_segment;
     typedef bgi::rtree<polygon_segment, params, indexable_segment, equal_to_segment, allocator_segment> rtree_segment;
 	
-
 	//~ typedef bgi::quadratic<MAX_NODE_SIZE> params;
     typedef bgi::indexable<polygon_box> indexable_box;
     typedef bgi::equal_to<polygon_box> equal_to_box;
@@ -616,8 +442,7 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 	double minXOut=MAX_DOUBLE,minYOut=MAX_DOUBLE,maxXout=-1*MAX_DOUBLE,maxYOut=-1*MAX_DOUBLE; 
 	CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "NO");
 	CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
-	
-	
+		
 	fstream f;
 	f.open(outIndex,ios::in);
 	if (f)
@@ -922,6 +747,41 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
     return true;
 }
 
+class ServerLogHandler : public crow::ILogHandler {
+    public:
+        void log(std::string /*message*/, crow::LogLevel /*level*/) override {
+        }
+};
+
+struct ServerMiddleware 
+{
+    std::string message;
+
+    ServerMiddleware() 
+    {
+        message = "foo";
+    }
+
+    void setMessage(std::string newMsg)
+    {
+        message = newMsg;
+    }
+
+    struct context
+    {
+		
+    };
+
+    void before_handle(crow::request& /*req*/, crow::response& /*res*/, context& /*ctx*/)
+    {
+        CROW_LOG_DEBUG << " - MESSAGE: " << message;
+    }
+
+    void after_handle(crow::request& /*req*/, crow::response& /*res*/, context& /*ctx*/)
+    {
+        // no-op
+    }
+};
 
 int main(int nArgc, char ** papszArgv)
 {
@@ -933,6 +793,7 @@ int main(int nArgc, char ** papszArgv)
 	hvpara.servicePort=atoi(papszArgv[6]);
     
     crow::App<ServerMiddleware> app;
+	// Vector Data Registration Service
     CROW_ROUTE(app,"/HiVision/add/<string>/<string>/<int>").name("HiVisionAdd")
     ([](const crow::request& req, crow::response& res, string shp, string appid, int type){
         char* redisHost=hvpara.redisHost;
@@ -958,7 +819,7 @@ int main(int nArgc, char ** papszArgv)
 			{
 				sprintf(tmp1,"%s",shp.c_str());
 			}
-			if(type==0)
+			if(type==0)//Point: type=0
 			{
 				sprintf(tmp2,"%sp%s",indexPath,appid.c_str());
 				sprintf(tmp3,"p%s",appid.c_str());
@@ -966,7 +827,7 @@ int main(int nArgc, char ** papszArgv)
 					res.write("[DONE] Register done!");
 				else 
 					throw "Failed";
-			}else if(type==1)
+			}else if(type==1)//LineString: type=1
 			{
 				sprintf(tmp2,"%sl%s",indexPath,appid.c_str());
 				sprintf(tmp3,"l%s",appid.c_str());
@@ -974,7 +835,7 @@ int main(int nArgc, char ** papszArgv)
 					res.write("[DONE] Register done!");
 				else 
 					throw "Failed";
-			}else if(type==2)
+			}else if(type==2)//Polygon: type=2
 			{
 				sprintf(tmp2,"%sa%s",indexPath,appid.c_str());
 				sprintf(tmp3,"a%s",appid.c_str());
@@ -994,10 +855,12 @@ int main(int nArgc, char ** papszArgv)
 			res.end();
 		}
     });
-
+	
+	//Vector Data Visualization WMTS (Scattor Plot)
     CROW_ROUTE(app, "/HiVision/<string>/<int>/<int>/<int>/<double>/<int>/<int>/<int>.png").name("HiVision")
     ([](const crow::request& req, crow::response& res,string appid, int R, int G, int B, double AD,int z,int x, int y){
-        char* redisHost=hvpara.redisHost;
+        //Init
+		char* redisHost=hvpara.redisHost;
         int redisPort=hvpara.redisPort;
         std::ostringstream os;
         Redis *redis = new Redis();
@@ -1009,23 +872,21 @@ int main(int nArgc, char ** papszArgv)
 		int AH=AD*256;
 		int Ax=(1-AD)*64;
 		int Ay=-64;
-		
 		char* key=new char[32];
 		char* newkey= new char[32];
-		
 		vector<char> pos;
 		long size;
-		//~ int layercount;
 		png_bytep * row_pointers=(png_bytep*)malloc(256*sizeof(png_bytep));
 		for(int i = 0; i < TILE_SIZE; i++)
-			row_pointers[i] = (png_bytep)malloc(1024);	
+			row_pointers[i] = (png_bytep)malloc(1024);
+		
+		//Generate tiles
         try{
 			char * tmp=new char[256];
 			int count;
 			char* bbox[8];
 			sprintf(tmp,"%s",redis->get(appid).c_str());
 			GetList(tmp, bbox, (char*)",", count);
-			//~ double r=atof(radius[0]);
 			double minx=atof(bbox[0]);
 			double miny=atof(bbox[1]);
 			double maxx=atof(bbox[2]);
@@ -1035,12 +896,13 @@ int main(int nArgc, char ** papszArgv)
 			double tile_maxx = ((256*x+255.5)/(128<<z)-1)* L;
 			double tile_maxy = (1-(256*y-0.5)/(128<<z))* L;
 			delete tmp;
-			if (tile_minx<maxx && tile_miny<maxy && tile_maxx>minx && tile_maxy> miny)
+			if (tile_minx<maxx && tile_miny<maxy && tile_maxx>minx && tile_maxy> miny)//Filter out tiles that are not in the spatial scope of data MBRs
 			{
 				sprintf(key,"%s/%d/%d/%d",appid.c_str(),z,x,y);
 				char (*buffer_area)[TILE_SIZE] = (char(*)[TILE_SIZE])malloc(TILE_SIZE*TILE_SIZE);
-				if (! redis->zget(key,(char *)buffer_area))
+				if (! redis->zget(key,(char *)buffer_area))//Filter out tiles that are previously processed and the visualization results that are still preserved in the Result Pool
 				{
+					//Create new tasks in the Task Pool
 					memset(newkey, 0, 32);
 					redisContext* rc = redisConnect(redisHost, redisPort);
 					redisReply* reply = (redisReply*) redisCommand(rc, "subscribe HiVisiontiles");
@@ -1052,8 +914,9 @@ int main(int nArgc, char ** papszArgv)
 					}
 					redis->zget(key,(char *)buffer_area);
 					freeReplyObject(reply);
-					redisFree(rc);	
+					redisFree(rc);
 				}
+				//collect results from Result Pool and render tiles according the given styles
 				png_structp png_ptr=png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 				png_infop info_ptr = png_create_info_struct(png_ptr);
 				FILE *temp_png=tmpfile();
@@ -1135,10 +998,11 @@ int main(int nArgc, char ** papszArgv)
 		}
     });
     
-
+	//Vector Data Visualization WMTS (Patterns Filling for Polygon Objects)
     CROW_ROUTE(app, "/HiVision/<string>/<int>/<int>/<int>/<string>/<double>/<int>/<int>/<int>.png").name("HiVision")
     ([](const crow::request& req, crow::response& res,string appid, int R, int G, int B, string pattern, double AD,int z,int x, int y){
-        char* redisHost=hvpara.redisHost;
+        //Init
+		char* redisHost=hvpara.redisHost;
         int redisPort=hvpara.redisPort;
         std::ostringstream os;
         Redis *redis = new Redis();
@@ -1150,13 +1014,10 @@ int main(int nArgc, char ** papszArgv)
 		int AH=AD*256;
 		int Ax=(1-AD)*64;
 		int Ay=-64;
-		
 		char* key=new char[32];
 		char* newkey= new char[32];
-		
 		vector<char> pos;
 		long size;
-		
 		
 		FILE *pic_fp;
 		png_structp png_ptr,pattern_png_ptr;
@@ -1172,9 +1033,10 @@ int main(int nArgc, char ** papszArgv)
 		
 		png_bytep * row_pointers=(png_bytep*)malloc(256*sizeof(png_bytep));
 		for(int i = 0; i < TILE_SIZE; i++)
-			row_pointers[i] = (png_bytep)malloc(1024);	
+			row_pointers[i] = (png_bytep)malloc(1024);
+		
+		//Generate tiles
         try{
-			
 			char * pngfile= new char[256];
 			sprintf(pngfile,"%s%s.png",hvpara.patternPath,pattern.c_str());
 			pic_fp = fopen(pngfile, "rb");
@@ -1207,12 +1069,14 @@ int main(int nArgc, char ** papszArgv)
 			double tile_maxx = ((256*x+255.5)/(128<<z)-1)* L;
 			double tile_maxy = (1-(256*y-0.5)/(128<<z))* L;
 			delete tmp;
-			if (tile_minx<maxx && tile_miny<maxy && tile_maxx>minx && tile_maxy> miny)
+			
+			if (tile_minx<maxx && tile_miny<maxy && tile_maxx>minx && tile_maxy> miny)//Filter out tiles that are not in the spatial scope of data MBRs
 			{
 				sprintf(key,"%s/%d/%d/%d",appid.c_str(),z,x,y);
 				char (*buffer_area)[TILE_SIZE] = (char(*)[TILE_SIZE])malloc(TILE_SIZE*TILE_SIZE);
-				if (! redis->zget(key,(char *)buffer_area))
+				if (!redis->zget(key,(char *)buffer_area))//Filter out tiles that are previously processed and the visualization results that are still preserved in the Result Pool
 				{
+					//Create new tasks in the Task Pool
 					memset(newkey, 0, 32);
 					redisContext* rc = redisConnect(redisHost, redisPort);
 					redisReply* reply = (redisReply*) redisCommand(rc, "subscribe HiVisiontiles");
@@ -1226,6 +1090,7 @@ int main(int nArgc, char ** papszArgv)
 					freeReplyObject(reply);
 					redisFree(rc);	
 				}
+				//collect results from Result Pool and render tiles according the given styles
 				png_structp png_ptr=png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 				png_infop info_ptr = png_create_info_struct(png_ptr);
 				FILE *temp_png=tmpfile();
@@ -1319,9 +1184,6 @@ int main(int nArgc, char ** papszArgv)
 		}
     });
     
-    // enables all log
-    //~ app.loglevel(crow::LogLevel::DEBUG);
-    //crow::logger::setHandler(std::make_shared<ServerLogHandler>());
     app.port(hvpara.servicePort)
         .multithreaded()
         .run();
