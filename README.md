@@ -27,21 +27,23 @@
 
 #### Application Scenarios:
 
-The datasets (see Tab 1) used in the demonstration are provided by map service providers. As the datasets are not open published, the raw datasets are encrypted by adding offsets. The interface of the demonstration is simple to use, choose a dataset and click the Enter button, then the visualizing results will be added to the map in real time. Fig 1-3 show the visualizing results.
+The datasets (see Tab 1) used in the demonstration are provided by map service providers. As the datasets are not open published, the raw datasets are encrypted by adding offsets. The interface of the demonstration is simple to use, choose a dataset and click the Enter button, then the visualizing results will be added to the map in real time. Fig 1-4 show the visualizing results.
 
 ![fig1](./figures/f1.jpg)
 
-*Fig1. China_POI*
+*Fig1. China POI*
 
 ![fig2](./figures/f2.jpg)
 
-*Fig2. China_Road*
+*Fig2. China roads*
 
 ![fig3](./figures/f3.jpg)
 
-*Fig3. China_Farmland*
+*Fig3. China farmlands*
 
+![fig4](./figures/f4.jpg)
 
+*Fig4. Patterns filling for polygon objects*
 
 ## Open Source
 
