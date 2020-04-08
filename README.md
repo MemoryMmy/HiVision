@@ -63,14 +63,15 @@ The datasets (see Tab 1) used in the demonstration are provided by map service p
 
 #### Compile:
 
-Run the following command to generate the executable programs:
+All the source codes are included in **HiVision_code**. Run the following command to generate the executable programs:
 
 > ```shell
-> $ mkdir build # Create a build directory
-> $ cd build # Move into build directory
-> $ cmake .. # Configure for your system
-> $ make # Generate the executable programs
-> $ cd .. # Move back to source directory
+> cd HiVision_code # Go to source directory
+> mkdir build # Create a build directory
+> cd build # Move into build directory
+> cmake .. # Configure for your system
+> make # Generate the executable programs
+> cd .. # Move back to source directory
 > ```
 
 #### Run& Stop:
