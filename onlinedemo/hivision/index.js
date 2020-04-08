@@ -11,7 +11,6 @@ var cp = $("#LayerCP").colorpicker({
     color: 'rgba(196,39,39,0.8)'
 });
 
-
 map.on('load',function() {
     var layerEl = document.getElementById('layers');
     var numEl = document.getElementById('num');
@@ -20,7 +19,7 @@ map.on('load',function() {
     map.addSource('test', {
         'type': 'raster',
         'tiles': ["http://www.higis.org.cn:10082/HiVision/pchinapoint/196/39/39/0.8/{z}/{x}/{y}.png"],
-        //'tileSize':256,
+        'tileSize':256,
         'minzoom': 0,
         'maxzoom': 24
     });
@@ -41,7 +40,7 @@ map.on('load',function() {
         map.addSource(id, {   
             'type': 'raster',
             'tiles': [`http://www.higis.org.cn:10082/HiVision/${layer_value}/${layerColor._r}/${layerColor._g}/${layerColor._b}/${layerColor._a}/{z}/{x}/{y}.png`],
-          //  'tileSize':256,
+            'tileSize':256,
             'minzoom': 0,
             'maxzoom': 24
         });
@@ -155,7 +154,6 @@ map.on('load',function() {
         if (feature) {
             var props = feature.properties;
             for (var key in props) {
-                // content += '<h4>' + key.toString().toUpperCase() + '</h4><p>' + props[key] + '</p>';
                 var t = key.toString().toUpperCase();
                 if (t === "IMAGE_URI") {
                     content = content + '<h4>' + t + '</h4><div><img style="width:200px; height:200px" src=' + props[key] + '></div>';
