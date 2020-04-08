@@ -61,12 +61,14 @@ The datasets (see Tab 1) used in the demonstration are provided by map service p
 
 #### Compile:
 
-Make sure that the header and lib files of **hiredis**, **libpng**, **MPICH**, **Boost** and **GDAL** are included in the **Makefile**, then run the following command to generate the executable program:
+Run the following command to generate the executable programs:
 
 > ```shell
-> $ make clean && make
-> $ cd ./visioncrowserver
-> $ make clean && make
+> $ mkdir build # Create a build directory
+> $ cd build # Move into build directory
+> $ cmake .. # Configure for your system
+> $ make # Generate the executable programs
+> $ cd .. # Move back to source directory
 > ```
 
 #### Run& Stop:
