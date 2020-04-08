@@ -1,4 +1,6 @@
 # HiVision
+Rapid Visualization of Large-Scale Spatial Vector Data
+
 
 
 ## [Online Demo1](http://www.higis.org.cn:8080/hivision/) 
@@ -27,23 +29,21 @@
 
 #### Application Scenarios:
 
-The datasets (see Tab 1) used in the demonstration are provided by map service providers. As the datasets are not open published, the raw datasets are encrypted by adding offsets. The interface of the demonstration is simple to use, choose a dataset and click the Enter button, then the visualizing results will be added to the map in real time. Fig 1-4 show the visualizing results.
+The datasets (see Tab 1) used in the demonstration are provided by map service providers. As the datasets are not open published, the raw datasets are encrypted by adding offsets. The interface of the demonstration is simple to use, choose a dataset and click the Enter button, then the visualizing results will be added to the map in real time. Fig 1-3 show the visualizing results.
 
-![fig1](./figures/f1.jpg)
+![fig1](D:/github/HiVision/figures/f1.jpg)
 
-*Fig1. China POI*
+*Fig1. China_POI*
 
-![fig2](./figures/f2.jpg)
+![fig2](D:/github/HiVision/figures/f2.jpg)
 
-*Fig2. China roads*
+*Fig2. China_Road*
 
-![fig3](./figures/f3.jpg)
+![fig3](D:/github/HiVision/figures/f3.jpg)
 
-*Fig3. China farmlands*
+*Fig3. China_Farmland*
 
-![fig4](./figures/f4.jpg)
 
-*Fig4. Patterns filling for polygon objects*
 
 ## Open Source
 
@@ -63,15 +63,12 @@ The datasets (see Tab 1) used in the demonstration are provided by map service p
 
 #### Compile:
 
-All the source codes are included in **HiVision_code**. Run the following command to generate the executable programs:
+Make sure that the header and lib files of **hiredis**, **libpng**, **MPICH**, **Boost** and **GDAL** are included in the **Makefile**, then run the following command to generate the executable program:
 
 > ```shell
-> cd HiVision_code # Go to source directory
-> mkdir build # Create a build directory
-> cd build # Move into build directory
-> cmake .. # Configure for your system
-> make # Generate the executable programs
-> cd .. # Move back to source directory
+> $ make clean && make
+> $ cd ./visioncrowserver
+> $ make clean && make
 > ```
 
 #### Run& Stop:

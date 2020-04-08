@@ -1,0 +1,143 @@
+<html>
+<head>
+    <meta charset='utf-8'/>
+    <title>Rapid Visualization of Large-Scale Spatial Vector Data</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no'/>
+    <script src="lib/jquery.js"></script>
+    <script src='mapbox-gl.js'></script>
+    <link rel="stylesheet" href="lib/css/app.css">
+    <link rel="stylesheet" href="lib/css/bootstrap.css">
+    <link rel='stylesheet' href='lib/mapbox-gl.css'/>
+    <link rel="stylesheet" href="lib/layer/css/layui.css">
+    <link rel="stylesheet" href="lib/css/bootstrap.min.css">
+    <link rel="stylesheet" href="lib/css/bootstrap-colorpicker.css">
+    <script src="lib/bootstrap-colorpicker.js" type="text/javascript"></script>
+    <script src="lib/layer/layui.js" type="text/javascript"></script>
+
+    <link rel='stylesheet' href='mapbox-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .map-overlay {
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            position: absolute;
+            width: 200px;
+            top: 0;
+            left: 0;
+            padding: 10px;
+        }
+
+        .map-overlay .map-overlay-inner {
+            background-color: #fff;
+            box-shadow:0 1px 2px rgba(0, 0, 0, 0.10);
+            border-radius: 3px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .map-overlay-inner fieldset {
+            border: none;
+            padding: 0;
+            margin: 0 0 10px;
+        }
+
+        .map-overlay-inner fieldset:last-child {
+            margin: 0;
+        }
+
+        .map-overlay-inner select {
+            width: 100%;
+        }
+
+        .map-overlay-inner label {
+            display: block;
+            font-weight: bold;
+            margin: 0 0 5px;
+        }
+
+        .map-overlay-inner button {
+            width: 100%;
+        }
+
+        .map-overlay-inner input {
+            width: 100%;
+        }
+
+        #menu a {
+            font-size: 13px;
+            color: #404040;
+            display: block;
+            margin: 0;
+            padding: 0;
+            padding: 10px;
+            text-decoration: none;
+            border-bottom: 1px solid rgba(0,0,0,0.25);
+            text-align: center;
+        }
+
+        #menu a:last-child {
+            border: none;
+        }
+
+        #menu a:hover {
+            background-color: #f8f8f8;
+            color: #404040;
+        }
+
+        #menu a.active {
+            background-color: rgba(18, 134, 200, 1);
+            color: #fff;
+        }
+
+        #menu a.active:hover {
+            background: #3074a4;
+        }
+
+        .higis-attr-popup h4 {
+            color: #CCCCCC;
+            margin: 0;
+            padding: 0;
+            text-transform: uppercase;
+            font: bold 11px "Helvetica Neue", "Helvetica", Arial;
+        }
+
+        .higis-attr-popup p {
+            margin: 0px;
+            padding: 0 0 7px;
+        }
+    </style>
+</head>
+<body>
+
+
+<div id='map'></div>
+<div class='map-overlay top'>
+    <div class='map-overlay-inner'>
+        <fieldset>
+            <label>Layer</label>
+            <select id="layers" name="layers">
+                <option value="pchinapoint">POI(MainlandChina)</option>
+                <option value="lchinaroad">Road(MainlandChina)</option>
+                <option value="acnt">Farmland(MainlandChina)</option>
+            </select>
+            <label>Color</label>
+            <input id="LayerCP" type="text" class="form-control" />
+            <button id='enter' type='button'>Enter</button>
+        </fieldset>
+    </div>
+</div>
+
+<script src="index.js"></script>
+</body>
+</html>
+
