@@ -11,11 +11,11 @@
 
 ***Tab1. Datasets: Roads, POI and Farmland of Mainland China (10-million-scale)***
 
-| Name           | Type       | Records    | Size                 |
-| -------------- | ---------- | ---------- | -------------------- |
-| China_Road     | LineString | 21,898,508 | 163,171,928 segments |
-| China_POI      | Point      | 20,258,450 | 20,258,450 points    |
-| China_Farmland | Polygon    | 10,520,644 | 133,830,561 edges    |
+| Name                    | Type       | Records    | Size                 |
+| ----------------------- | ---------- | ---------- | -------------------- |
+| China_Mainland_Road     | LineString | 21,898,508 | 163,171,928 segments |
+| China_Mainland_POI      | Point      | 20,258,450 | 20,258,450 points    |
+| China_Mainland_Farmland | Polygon    | 10,520,644 | 133,830,561 edges    |
 
 ***Tab2.  Demo Environment***
 
@@ -31,15 +31,15 @@ The datasets (see Tab 1) used in the demonstration are provided by map service p
 
 ![fig1](./figures/f1.jpg)
 
-*Fig1. China POI*
+*Fig1. China Mainland POI*
 
 ![fig2](./figures/f2.jpg)
 
-*Fig2. China roads*
+*Fig2. China Mainland roads*
 
 ![fig3](./figures/f3.jpg)
 
-*Fig3. China farmlands*
+*Fig3. China Mainland farmlands*
 
 ![fig4](./figures/f4.jpg)
 
