@@ -7,6 +7,8 @@ project (hivision
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
+set(CMAKE_POLICY_DEFAULT_CMP0054 NEW)
+
 find_package(MPI REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 find_package(PNG REQUIRED)

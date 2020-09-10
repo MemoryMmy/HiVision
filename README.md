@@ -47,19 +47,19 @@ The datasets (see Tab 1) used in the demonstration are provided by map service p
 
 ## Open Source
 
-#### Software dependencies:
+#### Software dependencies（[tutorial](./dep_software/dep_software_install.txt) for installing the software from source code）:
 
 [Redis](https://redis.io) (recommended version 3.2.12)
 
-[hiredis](https://github.com/redis/hiredis) (recommended version 0.13.3)
+[hiredis](https://github.com/redis/hiredis) (recommended version 1.0.0)
 
-[MPICH](http://www.mpich.org/) (recommended version 3.0.4)
+[MPICH](http://www.mpich.org/) (recommended version 3.3.2)
 
-[Boost C++ Libraries](https://www.boost.org/) (recommended version 1.64)
+[Boost C++ Libraries](https://www.boost.org/) (recommended version 1.72)
 
-[Geospatial Data Abstraction Library (GDAL)](http://www.gdal.org/) >=2.0 (recommended version 2.1.2)
+[Geospatial Data Abstraction Library (GDAL)](http://www.gdal.org/) >=2.0 (recommended version 2.4.4)
 
-[libpng](http://www.libpng.org/pub/png//libpng.html) (recommended version 1.2.59)
+[libpng](http://www.libpng.org/pub/png//libpng.html) (recommended version 1.6.37)
 
 #### Compile:
 
