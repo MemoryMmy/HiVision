@@ -50,19 +50,29 @@ using namespace std;
 #define TILE_SIZE 256
 #define L 20037508.34
 
+/** 
+ * @brief Startup parameters
+ */
 class HiVisionPara
 {
 	public:
-	char *shpPath=NULL;
-	char *indexPath=NULL;
-	char *patternPath=NULL;
-	char *pgPath=NULL;
-	char *redisHost=NULL;
-	int redisPort=6379;
-	int servicePort=10080;
+	char *shpPath=NULL;		// Path of the input shapefiles
+	char *indexPath=NULL;	// Path to store the spatial indexes
+	char *patternPath=NULL; // Path of the input patterns
+	char *redisHost=NULL;	// Host IP of Redis
+	int redisPort=6379;		// Host Port of Redis
+	int servicePort=10080;	// Port of the HiVision service
 };
 HiVisionPara hvpara;
 
+/** 
+ * @brief Split a string into a list where each word is a list item
+ * @param argv   	Input string
+ * @param result[]  Output Word list
+ * @param flag  	Separator used to split the string
+ * @param count  	Output Word list length
+ *
+ */
 void GetList(char* argv, char* result[], char* flag, int& count)
 {
 	char* string = strdup(argv); 
@@ -77,28 +87,36 @@ void GetList(char* argv, char* result[], char* flag, int& count)
 	count = i;
 }
 
-//Create Spatial Indexes and Write Dataset meta-data for Linestring Datasets
-bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport ,bool ispg=false)
+/** 
+ * @brief Create Spatial Indexes and Write Dataset meta-data for Linestring Datasets
+ * @param shpFile   	Input Linestring shpfile path
+ * @param outIndex  	Output spatial index path
+ * @param redishost  	Host IP of Redis
+ * @param rediskey  	Data id
+ * @param redisport  	Host Port of Redis
+ *
+ */
+bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport)
 {
-	typedef bgm::d2::point_xy<double> point;
-	typedef bgm::segment<point> segment;
-
-    struct timeval t1,t2;
+    //Record the running time of the program
+	struct timeval t1,t2;
     double timeuse;
     gettimeofday(&t1,NULL);
 	
-
+	//Init
+	typedef bgm::d2::point_xy<double> point;
+	typedef bgm::segment<point> segment;
     typedef bgi::quadratic<MAX_NODE_SIZE> params;
     typedef bgi::indexable<segment> indexable_segment;
     typedef bgi::equal_to<segment> equal_to_segment;
     typedef bi::allocator<segment, bi::managed_mapped_file::segment_manager> allocator_segment;
     typedef bgi::rtree<segment, params, indexable_segment, equal_to_segment, allocator_segment> rtree_segment;
-	long size =300000;
-		
+	long size =300000;// Max size (MB) of the spatial index mapped file
 	double minXOut=MAX_DOUBLE,minYOut=MAX_DOUBLE,maxXout=-1*MAX_DOUBLE,maxYOut=-1*MAX_DOUBLE; 
 	CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "NO");
 	CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
 	
+	//Check whether the dataset has been registered
 	fstream f;
 	f.open(outIndex,ios::in);
 	if (f)
@@ -107,16 +125,9 @@ bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,in
 		return false;
 	}
 	f.close();
-	
-	printf("--shp: %s\n", shpFile);
-	printf("--output: %s\n", outIndex);
-	printf("--rediskey: %s\n", rediskey);
-	printf("--redishost: %s\n", redishost);
-	printf("--redisport: %d\n", redisport);
-	printf("--maxsize: %ld MB\n", size);
 	remove(outIndex);
 
-	
+	//Connect redis
 	Redis *redis = new Redis();
 	if(!redis->connect(redishost, redisport))
 	{
@@ -124,37 +135,24 @@ bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,in
 		return false;
 	}
 	
+	//Read shpfile
 	GDALAllRegister();
 	OGRRegisterAll();
 	OGRLayer* shpLayer;
 	OGRFeature *shpFeature;
 	GDALDataset* shpDS;
-	
-	if(ispg)
+	shpDS =(GDALDataset*)GDALOpenEx(shpFile, GDAL_OF_VECTOR,NULL, NULL, NULL );
+	if(shpDS==NULL)
 	{
-		shpDS =(GDALDataset*)GDALOpenEx(hvpara.pgPath, GDAL_OF_VECTOR,NULL, NULL, NULL );
-		if(shpDS==NULL)
-		{
-			printf("[ERROR] Connect postgre failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
-			return false;
-		}
-		shpLayer=shpDS->GetLayerByName(shpFile);
-	}else
-	{
-		shpDS =(GDALDataset*)GDALOpenEx(shpFile, GDAL_OF_VECTOR,NULL, NULL, NULL );
-		if(shpDS==NULL)
-		{
-			printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
-			return false;
-		}
-		shpLayer=shpDS->GetLayer(0);
+		printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
+		return false;
 	}
+	shpLayer=shpDS->GetLayer(0);
 	if(shpLayer==NULL)
 	{
 		printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
 		return false;
 	}
-	
 	OGREnvelope env;
 	if(shpLayer->GetExtent(&env)!=0)
 	{
@@ -167,6 +165,7 @@ bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,in
 	maxYOut=maxYOut>env.MaxY? maxYOut:env.MaxY;
 	shpLayer->ResetReading();
 	
+	//Create coordinate transformation to the Web Mercator projection 
 	OGRSpatialReference* fRef;
 	OGRSpatialReference tRef;
 	fRef = shpLayer->GetSpatialRef();
@@ -179,18 +178,17 @@ bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,in
 	OGRCoordinateTransformation *coordTrans;
 	coordTrans = OGRCreateCoordinateTransformation(fRef, &tRef);
 	
+	//Write Dataset meta-data to redis
 	coordTrans ->Transform(1,&minXOut,&minYOut);
     coordTrans ->Transform(1,&maxXout,&maxYOut); 
-    
     char * tmp=new char[256];
     sprintf(tmp,"%lf,%lf,%lf,%lf", minXOut,minYOut,maxXout,maxYOut);
 	redis->set(rediskey,tmp);
 	
+	//Create spatial index
 	bi::managed_mapped_file file(bi::create_only, outIndex, size*1024*1024);
     allocator_segment alloc(file.get_segment_manager());
     rtree_segment * rtree_ptr = file.construct<rtree_segment>("rtree")(params(), indexable_segment(), equal_to_segment(), alloc);
-	
-	std::cout << rtree_ptr->size() << std::endl;
 	double px0,py0,px1,py1;
 	while((shpFeature=shpLayer-> GetNextFeature())!= NULL)
 	{	
@@ -246,36 +244,47 @@ bool Linestring( char* shpFile, char* outIndex,char* redishost,char* rediskey,in
 		remove(outIndex);
 		return false;
 	}
-	std::cout << rtree_ptr->size() << std::endl;
+	
+	//Shrink the spatial index file to minimize the space waste 
 	bi::managed_mapped_file::shrink_to_fit(outIndex);
+	
+	//Write process log
 	gettimeofday(&t2,NULL);
     timeuse=t2.tv_sec-t1.tv_sec+(t2.tv_usec-t1.tv_usec)/1000000.0;
-     printf("[DONE] %s Use Time:%f\n", outIndex,timeuse);
+    printf("[DONE] %s Use Time:%f\n", outIndex,timeuse);
 	
     return true;
 }
 
-//Create Spatial Indexes and Write Dataset meta-data for Point Datasets
-bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport  ,bool ispg=false)
-{
-	typedef bgm::d2::point_xy<double> point;
-    
+/** 
+ * @brief Create Spatial Indexes and Write Dataset meta-data for Point Datasets
+ * @param shpFile   	Input Point shpfile path
+ * @param outIndex  	Output spatial index path
+ * @param redishost  	Host IP of Redis
+ * @param rediskey  	Data id
+ * @param redisport  	Host Port of Redis
+ *
+ */
+bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport)
+{  
+	//Record the running time of the program
     struct timeval t1,t2;
     double timeuse;
     gettimeofday(&t1,NULL);
 
-    typedef bgi::quadratic<MAX_NODE_SIZE> params_t;
+	//Init
+    typedef bgm::d2::point_xy<double> point;
+	typedef bgi::quadratic<MAX_NODE_SIZE> params_t;
     typedef bgi::indexable<point> indexable_t;
     typedef bgi::equal_to<point> equal_to_t;
     typedef bi::allocator<point, bi::managed_mapped_file::segment_manager> allocator_t;
     typedef bgi::rtree<point, params_t, indexable_t, equal_to_t, allocator_t> rtree_t;
-    
-	long size =300000;
-		
+    long size =300000;// Max size (MB) of the spatial index mapped file
 	double minXOut=MAX_DOUBLE,minYOut=MAX_DOUBLE,maxXout=-1*MAX_DOUBLE,maxYOut=-1*MAX_DOUBLE; 
 	CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "NO");
 	CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
 	
+	//Check whether the dataset has been registered
 	fstream f;
 	f.open(outIndex,ios::in);
 	if (f)
@@ -284,16 +293,9 @@ bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int red
 		return false;
 	}
 	f.close();
-	
-	printf("--shp: %s\n", shpFile);
-	printf("--output: %s\n", outIndex);
-	printf("--rediskey: %s\n", rediskey);
-	printf("--redishost: %s\n", redishost);
-	printf("--redisport: %d\n", redisport);
-	printf("--maxsize: %ld MB\n", size);
-	
 	remove(outIndex);
 	
+	//Connect redis
 	Redis *redis = new Redis();
 	if(!redis->connect(redishost, redisport))
 	{
@@ -301,37 +303,23 @@ bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int red
 		return false;
 	}
 	
+	//Read shpfile
 	OGRRegisterAll();
 	OGRLayer* shpLayer;
 	OGRFeature *shpFeature;
 	GDALDataset* shpDS;
-	if(ispg)
+	shpDS =(GDALDataset*)GDALOpenEx(shpFile, GDAL_OF_VECTOR,NULL, NULL, NULL );
+	if(shpDS==NULL)
 	{
-		shpDS =(GDALDataset*)GDALOpenEx(hvpara.pgPath, GDAL_OF_VECTOR,NULL, NULL, NULL );
-		if(shpDS==NULL)
-		{
-			printf("[ERROR] Connect postgre failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
-			return false;
-		}
-		shpLayer=shpDS->GetLayerByName(shpFile);
-	}else
-	{
-		shpDS =(GDALDataset*)GDALOpenEx(shpFile, GDAL_OF_VECTOR,NULL, NULL, NULL );
-		if(shpDS==NULL)
-		{
-			printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
-			return false;
-		}
-		shpLayer=shpDS->GetLayer(0);
+		printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
+		return false;
 	}
+	shpLayer=shpDS->GetLayer(0);
 	if(shpLayer==NULL)
 	{
 		printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
 		return false;
 	}
-
-	
-	
 	OGREnvelope env;
 	if(shpLayer->GetExtent(&env)!=0)
 	{
@@ -344,6 +332,7 @@ bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int red
 	maxYOut=maxYOut>env.MaxY? maxYOut:env.MaxY;
 	shpLayer->ResetReading();
 
+	//Create coordinate transformation to the Web Mercator projection 
 	OGRSpatialReference* fRef;
 	OGRSpatialReference tRef;
 	fRef = shpLayer->GetSpatialRef();
@@ -356,17 +345,17 @@ bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int red
 	OGRCoordinateTransformation *coordTrans;
 	coordTrans = OGRCreateCoordinateTransformation(fRef, &tRef);
 	
+	//Write Dataset meta-data to redis
     coordTrans ->Transform(1,&minXOut,&minYOut);
     coordTrans ->Transform(1,&maxXout,&maxYOut);
     char * tmp=new char[256];
     sprintf(tmp,"%lf,%lf,%lf,%lf", minXOut,minYOut,maxXout,maxYOut);
 	redis->set(rediskey,tmp);
+	
+	//Create spatial index
 	bi::managed_mapped_file file(bi::create_only, outIndex, size*1024*1024);
 	allocator_t alloc(file.get_segment_manager());
 	rtree_t * rtree_ptr = file.find_or_construct<rtree_t>("rtree")(params_t(), indexable_t(), equal_to_t(), alloc);
-	
-	std::cout << rtree_ptr->size() << std::endl;
-
 	double px0,py0;
 	while((shpFeature=shpLayer-> GetNextFeature())!= NULL)
 	{	
@@ -403,46 +392,58 @@ bool Point( char* shpFile, char* outIndex,char* redishost,char* rediskey,int red
 		remove(outIndex);
 		return false;
 	}
-	std::cout << rtree_ptr->size() << std::endl;
+	
+	//Shrink the spatial index file to minimize the space waste 
 	bi::managed_mapped_file::shrink_to_fit(outIndex);
+	
+	//Write process log
 	gettimeofday(&t2,NULL);
     timeuse=t2.tv_sec-t1.tv_sec+(t2.tv_usec-t1.tv_usec)/1000000.0;
     printf("[DONE] %s Use Time:%f\n", outIndex,timeuse);
     return true;
 }
 
-//Create Spatial Indexes and Write Dataset meta-data for Polygon Datasets
-bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport,bool ispg=false)
+/** 
+ * @brief Create Spatial Indexes and Write Dataset meta-data for Polygon Datasets
+ * @param shpFile   	Input Polygon shpfile path
+ * @param outIndex  	Output spatial index path
+ * @param redishost  	host IP of Redis
+ * @param rediskey  	Data id
+ * @param redisport  	host Port of Redis
+ *
+ */
+bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int redisport)
 {
-	typedef bgm::d2::point_xy<double> point;
-	typedef bgm::box<point> box;
-	typedef bgm::segment<point> segment;
-	typedef boost::tuple<segment,unsigned long,bool> polygon_segment;
-	typedef std::pair<box,unsigned long> polygon_box;  
+	
 	 
+	//Record the running time of the program 
     struct timeval t1,t2;
     double timeuse;
     gettimeofday(&t1,NULL);
 	
+	//Init
+	typedef bgm::d2::point_xy<double> point;
+	typedef bgm::box<point> box;
+	typedef bgm::segment<point> segment;
+	typedef boost::tuple<segment,unsigned long,bool> polygon_segment;
+	typedef std::pair<box,unsigned long> polygon_box;
 	typedef bgi::quadratic<MAX_NODE_SIZE> params;
     typedef bgi::indexable<polygon_segment> indexable_segment;
     typedef bgi::equal_to<polygon_segment> equal_to_segment;
     typedef bi::allocator<polygon_segment, bi::managed_mapped_file::segment_manager> allocator_segment;
     typedef bgi::rtree<polygon_segment, params, indexable_segment, equal_to_segment, allocator_segment> rtree_segment;
-	
-	//~ typedef bgi::quadratic<MAX_NODE_SIZE> params;
-    typedef bgi::indexable<polygon_box> indexable_box;
+	typedef bgi::indexable<polygon_box> indexable_box;
     typedef bgi::equal_to<polygon_box> equal_to_box;
     typedef bi::allocator<polygon_box, bi::managed_mapped_file::segment_manager> allocator_box;
     typedef bgi::rtree<polygon_box, params, indexable_box, equal_to_box, allocator_box> rtree_box;
-	
-	char* outMBRIndex=new char[256];
-	long size =300000;
-	double tolerance=0.00001;//大于24级瓦片精度
+	char* outMBRIndex=new char[256];//Output spatial index MBR path
+	long size =300000;// Max size (MB) of the spatial index mapped file
+	double tolerance=0.00001;
 	double minXOut=MAX_DOUBLE,minYOut=MAX_DOUBLE,maxXout=-1*MAX_DOUBLE,maxYOut=-1*MAX_DOUBLE; 
 	CPLSetConfigOption("GDAL_FILENAME_IS_UTF8", "NO");
 	CPLSetConfigOption("SHAPE_ENCODING", "UTF-8");
-		
+	
+	//Check whether the dataset has been registered
 	fstream f;
 	f.open(outIndex,ios::in);
 	if (f)
@@ -451,15 +452,11 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 		return false;
 	}
 	f.close();
-
 	sprintf(outMBRIndex,"%s_mbr",outIndex);
-	printf("--shp: %s\n", shpFile);
-	printf("--output: %s  %s \n", outIndex,outMBRIndex);
-	printf("--rediskey: %s\n", rediskey);
-	printf("--redishost: %s\n", redishost);
-	printf("--redisport: %d\n", redisport);
-	printf("--maxsize: %ld MB\n", size);
+	remove(outIndex);
+	remove(outMBRIndex);
 	
+	//Connect redis
 	Redis *redis = new Redis();
 	if(!redis->connect(redishost, redisport))
 	{
@@ -467,32 +464,18 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 		return false;
 	}
 
-	remove(outIndex);
-	remove(outMBRIndex);
-	
+	//Read shpfile
 	OGRRegisterAll();
 	OGRLayer* shpLayer;
 	OGRFeature *shpFeature;
-	GDALDataset* shpDS;
-	if(ispg)
+	GDALDataset* shpDS;	
+	shpDS =(GDALDataset*)GDALOpenEx(shpFile, GDAL_OF_VECTOR,NULL, NULL, NULL );
+	if(shpDS==NULL)
 	{
-		shpDS =(GDALDataset*)GDALOpenEx(hvpara.pgPath, GDAL_OF_VECTOR,NULL, NULL, NULL );
-		if(shpDS==NULL)
-		{
-			printf("[ERROR] Connect postgre failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
-			return false;
-		}
-		shpLayer=shpDS->GetLayerByName(shpFile);
-	}else
-	{
-		shpDS =(GDALDataset*)GDALOpenEx(shpFile, GDAL_OF_VECTOR,NULL, NULL, NULL );
-		if(shpDS==NULL)
-		{
-			printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
-			return false;
-		}
-		shpLayer=shpDS->GetLayer(0);
+		printf("[ERROR] Open shpFile failed. shpFile:%s outIndex:%s\n",shpFile,outIndex);
+		return false;
 	}
+	shpLayer=shpDS->GetLayer(0);
 	if(shpLayer==NULL)
 	{
 		printf("[ERROR] No such layer. shpFile:%s outIndex:%s\n",shpFile,outIndex);
@@ -509,6 +492,8 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 	maxXout=maxXout>env.MaxX? maxXout:env.MaxX;
 	maxYOut=maxYOut>env.MaxY? maxYOut:env.MaxY;
 	shpLayer->ResetReading();
+	
+	//Create Coordinate Transformation to the Web Mercator projection 	
 	OGRSpatialReference* fRef;
 	OGRSpatialReference tRef;
 	fRef = shpLayer->GetSpatialRef();
@@ -522,19 +507,20 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 	OGRCoordinateTransformation *coordTrans;
 	coordTrans = OGRCreateCoordinateTransformation(fRef, &tRef);
 	
+	//Write Dataset meta-data to redis
 	coordTrans ->Transform(1,&minXOut,&minYOut);
     coordTrans ->Transform(1,&maxXout,&maxYOut);
     char * tmp=new char[256];
     sprintf(tmp,"%lf,%lf,%lf,%lf", minXOut,minYOut,maxXout,maxYOut);
 	redis->set(rediskey,tmp);
+	
+	//Create spatial index
 	bi::managed_mapped_file file(bi::create_only, outIndex, size*1024*1024);
     allocator_segment alloc(file.get_segment_manager());
     rtree_segment * rtree_ptr = file.construct<rtree_segment>("rtree")(params(), indexable_segment(), equal_to_segment(), alloc);
-	
 	bi::managed_mapped_file filembr(bi::create_only, outMBRIndex, size*128*1024);
     allocator_segment alloc_mbr(filembr.get_segment_manager());
     rtree_box * rtree_ptr_mbr = filembr.construct<rtree_box>("rtree")(params(), indexable_box(), equal_to_box(), alloc_mbr);
-	std::cout << rtree_ptr->size()<<" "<<rtree_ptr_mbr->size() << std::endl;
 	unsigned long polygonID=0;
 	double px0,py0,px1,py1;
 	double change;
@@ -546,12 +532,9 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 		OGRGeometry *poGeometry=shpFeature->GetGeometryRef();
 		if(poGeometry==NULL)
 		continue;
-		
-		//~ printf("polygonID:%ld\n",polygonID);
 		int eType = wkbFlatten(poGeometry->getGeometryType());
 		if(eType == wkbPolygon)
 		{	
-			//~ printf("wkbPolygon: polygonID %ld \n",polygonID);
 			OGRPolygon* pOGRPolygon=(OGRPolygon*) poGeometry;
 			OGRLinearRing *pLinearRing = pOGRPolygon->getExteriorRing();
 			if(pLinearRing==NULL)
@@ -578,7 +561,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 				maxy=maxy>py1? maxy:py1;
 				if (fabs(py1-py0)<tolerance)
 				{
-					//~ printf("py1:%lf py0:%lf abs(py1-py0):%20.18lf tolerance:%20.18lf\n",py1,py0,abs(py1-py0),tolerance);
 					rtree_ptr->insert(boost::make_tuple(segment(point(px0, py0),point(px1,py1)),polygonID,false));
 				}
 				else if(change*(py0-py1)<0)
@@ -590,7 +572,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 					
 				}else
 					rtree_ptr->insert(boost::make_tuple(segment(point(px0, py0),point(px1,py1)),polygonID,true));
-				//~ printf(" %ld: %lf  %lf  %lf  %lf  \n",polygonID,px0,py0,px1,py1);
 				px0=px1;
 				py0=py1;
 				change=py1-py0;
@@ -629,7 +610,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 						
 					}else
 						rtree_ptr->insert(boost::make_tuple(segment(point(px0, py0),point(px1,py1)),polygonID,true));
-					//~ printf(" %ld: %lf  %lf  %lf  %lf  \n",polygonID,px0,py0,px1,py1);
 					px0=px1;
 					py0=py1;
 					change=py1-py0;
@@ -640,7 +620,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 		}
 		else if( eType == wkbMultiPolygon)
 		{
-			//~ printf("wkbMultiPolygon: polygonID %ld \n",polygonID);
 			OGRMultiPolygon* pOGRMultiPolygon=(OGRMultiPolygon*) poGeometry;
 			int polygonCount =pOGRMultiPolygon->getNumGeometries();
 			for(int k=0;k<polygonCount;k++)
@@ -680,7 +659,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 						
 					}else
 						rtree_ptr->insert(boost::make_tuple(segment(point(px0, py0),point(px1,py1)),polygonID,true));
-					//~ printf(" %ld: %lf  %lf  %lf  %lf  \n",polygonID,px0,py0,px1,py1);
 					px0=px1;
 					py0=py1;
 					change=py1-py0;
@@ -690,7 +668,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 				for (int j=0;j<innerCount;j++)
 				{
 					pLinearRing = pOGRPolygon->getInteriorRing(j);
-					//~ pLinearRing->closeRings();
 				    pointCount=pLinearRing->getNumPoints();
 					px0 =pLinearRing->getX(0);
 					py0 =pLinearRing->getY(0);
@@ -720,7 +697,6 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 							
 						}else
 							rtree_ptr->insert(boost::make_tuple(segment(point(px0, py0),point(px1,py1)),polygonID,true));
-						//~ printf(" %ld: %lf  %lf  %lf  %lf  \n",polygonID,px0,py0,px1,py1);
 						px0=px1;
 						py0=py1;
 						change=py1-py0;
@@ -738,9 +714,12 @@ bool Polygon( char* shpFile, char* outIndex,char* redishost,char* rediskey,int r
 		remove(outMBRIndex);
 		return false;
 	}
-	std::cout << rtree_ptr->size()<<" "<<rtree_ptr_mbr->size() << std::endl;
+	
+	//Shrink the spatial index file to minimize the space waste 
 	bi::managed_mapped_file::shrink_to_fit(outIndex);
 	bi::managed_mapped_file::shrink_to_fit(outMBRIndex);
+	
+	//Write process log
 	gettimeofday(&t2,NULL);
     timeuse=t2.tv_sec-t1.tv_sec+(t2.tv_usec-t1.tv_usec)/1000000.0;
     printf("[DONE] %s Use Time:%f\n", outIndex,timeuse);
@@ -783,17 +762,30 @@ struct ServerMiddleware
     }
 };
 
+/** 
+ * @brief HiVision service main function
+ * @param nArgc   	Input parameters copunt
+ * @param papszArgv Input startup parameters
+ *
+ */
 int main(int nArgc, char ** papszArgv)
 {
-	hvpara.shpPath=papszArgv[1];
-	hvpara.indexPath=papszArgv[2];
-	hvpara.patternPath=papszArgv[3];
-	hvpara.redisHost=papszArgv[4];
-	hvpara.redisPort=atoi(papszArgv[5]);
-	hvpara.servicePort=atoi(papszArgv[6]);
+	hvpara.shpPath=papszArgv[1];			//Path of the input shapefiles
+	hvpara.indexPath=papszArgv[2];			// Path to store the spatial indexes
+	hvpara.patternPath=papszArgv[3];		// Path of the input patterns
+	hvpara.redisHost=papszArgv[4];			// Host IP of Redis
+	hvpara.redisPort=atoi(papszArgv[5]);	// Host Port of Redis
+	hvpara.servicePort=atoi(papszArgv[6]);	// Port of the HiVision services
     
-    crow::App<ServerMiddleware> app;
-	// Vector Data Registration Service
+	crow::App<ServerMiddleware> app;
+	
+	/** 
+	* Vector Data Registration Service
+	* http://hostIP:servicePort/HiVision/add/{shapefile_name}/{id}/{type}
+	* Point: type=0
+	* LineString: type=1
+	* Polygon: type=2
+	*/
     CROW_ROUTE(app,"/HiVision/add/<string>/<string>/<int>").name("HiVisionAdd")
     ([](const crow::request& req, crow::response& res, string shp, string appid, int type){
         char* redisHost=hvpara.redisHost;
@@ -819,7 +811,7 @@ int main(int nArgc, char ** papszArgv)
 			{
 				sprintf(tmp1,"%s",shp.c_str());
 			}
-			if(type==0)//Point: type=0
+			if(type==0)//type=0 Register point dataset
 			{
 				sprintf(tmp2,"%sp%s",indexPath,appid.c_str());
 				sprintf(tmp3,"p%s",appid.c_str());
@@ -827,7 +819,7 @@ int main(int nArgc, char ** papszArgv)
 					res.write("[DONE] Register done!");
 				else 
 					throw "Failed";
-			}else if(type==1)//LineString: type=1
+			}else if(type==1)//type=1  Register LineString dataset
 			{
 				sprintf(tmp2,"%sl%s",indexPath,appid.c_str());
 				sprintf(tmp3,"l%s",appid.c_str());
@@ -835,7 +827,7 @@ int main(int nArgc, char ** papszArgv)
 					res.write("[DONE] Register done!");
 				else 
 					throw "Failed";
-			}else if(type==2)//Polygon: type=2
+			}else if(type==2)//type=2 Register Polygon dataset
 			{
 				sprintf(tmp2,"%sa%s",indexPath,appid.c_str());
 				sprintf(tmp3,"a%s",appid.c_str());
@@ -856,10 +848,15 @@ int main(int nArgc, char ** papszArgv)
 		}
     });
 	
-	//Vector Data Visualization WMTS (Scattor Plot)
+	/** 
+	* Vector Data Visualization WMTS (Scattor Plot)
+	* http://hostIP:servicePort/HiVision/{id}/{R}/{G}/{B}/{A}/{z}/{x}/{y}.png
+	* Point: type=0
+	* LineString: type=1
+	* Polygon: type=2
+	*/
     CROW_ROUTE(app, "/HiVision/<string>/<int>/<int>/<int>/<double>/<int>/<int>/<int>.png").name("HiVision")
     ([](const crow::request& req, crow::response& res,string appid, int R, int G, int B, double AD,int z,int x, int y){
-        //Init
 		char* redisHost=hvpara.redisHost;
         int redisPort=hvpara.redisPort;
         std::ostringstream os;
@@ -896,11 +893,15 @@ int main(int nArgc, char ** papszArgv)
 			double tile_maxx = ((256*x+255.5)/(128<<z)-1)* L;
 			double tile_maxy = (1-(256*y-0.5)/(128<<z))* L;
 			delete tmp;
-			if (tile_minx<maxx && tile_miny<maxy && tile_maxx>minx && tile_maxy> miny)//Filter out tiles that are not in the spatial scope of data MBRs
+			
+			//Filter out tiles that are not in the spatial scope of data MBRs
+			if (tile_minx<maxx && tile_miny<maxy && tile_maxx>minx && tile_maxy> miny)
 			{
 				sprintf(key,"%s/%d/%d/%d",appid.c_str(),z,x,y);
 				char (*buffer_area)[TILE_SIZE] = (char(*)[TILE_SIZE])malloc(TILE_SIZE*TILE_SIZE);
-				if (! redis->zget(key,(char *)buffer_area))//Filter out tiles that are previously processed and the visualization results that are still preserved in the Result Pool
+				
+				//Filter out tiles that are previously processed and the visualization results that are still preserved in the Result Pool
+				if (! redis->zget(key,(char *)buffer_area))
 				{
 					//Create new tasks in the Task Pool
 					memset(newkey, 0, 32);
@@ -916,6 +917,7 @@ int main(int nArgc, char ** papszArgv)
 					freeReplyObject(reply);
 					redisFree(rc);
 				}
+				
 				//collect results from Result Pool and render tiles according the given styles
 				png_structp png_ptr=png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 				png_infop info_ptr = png_create_info_struct(png_ptr);
@@ -998,7 +1000,10 @@ int main(int nArgc, char ** papszArgv)
 		}
     });
     
-	//Vector Data Visualization WMTS (Patterns Filling for Polygon Objects)
+	/** 
+	* Vector Data Visualization WMTS (Patterns Filling for Polygon Objects)
+	* http://hostIP:servicePort/HiVision/{id}/{R}/{G}/{B}/{pattern_id}/{A}/{z}/{x}/{y}.png
+	*/
     CROW_ROUTE(app, "/HiVision/<string>/<int>/<int>/<int>/<string>/<double>/<int>/<int>/<int>.png").name("HiVision")
     ([](const crow::request& req, crow::response& res,string appid, int R, int G, int B, string pattern, double AD,int z,int x, int y){
         //Init
@@ -1018,23 +1023,18 @@ int main(int nArgc, char ** papszArgv)
 		char* newkey= new char[32];
 		vector<char> pos;
 		long size;
-		
 		FILE *pic_fp;
 		png_structp png_ptr,pattern_png_ptr;
 		png_infop  info_ptr,pattern_info_ptr;
-		
 		pattern_png_ptr  = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
 		pattern_info_ptr = png_create_info_struct(pattern_png_ptr);
-		setjmp(png_jmpbuf(pattern_png_ptr)); 
-			
+		setjmp(png_jmpbuf(pattern_png_ptr)); 	
 		png_ptr  = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
 		info_ptr = png_create_info_struct(png_ptr);
 		setjmp(png_jmpbuf(png_ptr)); 
-		
 		png_bytep * row_pointers=(png_bytep*)malloc(256*sizeof(png_bytep));
 		for(int i = 0; i < TILE_SIZE; i++)
 			row_pointers[i] = (png_bytep)malloc(1024);
-		
 		//Generate tiles
         try{
 			char * pngfile= new char[256];
@@ -1042,24 +1042,19 @@ int main(int nArgc, char ** papszArgv)
 			pic_fp = fopen(pngfile, "rb");
 			if(pic_fp == NULL)
 				throw "Open pattern file failed!";
-			
 			rewind(pic_fp);
 			png_init_io(pattern_png_ptr, pic_fp);
 			png_read_png(pattern_png_ptr, pattern_info_ptr, PNG_TRANSFORM_EXPAND, 0);
-
 			int pattern_width, pattern_height;
-
 			png_bytep* pattern_row_pointers;
 			pattern_row_pointers = png_get_rows(pattern_png_ptr, pattern_info_ptr);
 			pattern_width = png_get_image_width(pattern_png_ptr, pattern_info_ptr);
 			pattern_height = png_get_image_height(pattern_png_ptr, pattern_info_ptr);		
-			
 			char * tmp=new char[256];
 			int count;
 			char* bbox[8];
 			sprintf(tmp,"%s",redis->get(appid).c_str());
 			GetList(tmp, bbox, (char*)",", count);
-
 			double minx=atof(bbox[0]);
 			double miny=atof(bbox[1]);
 			double maxx=atof(bbox[2]);
@@ -1069,7 +1064,6 @@ int main(int nArgc, char ** papszArgv)
 			double tile_maxx = ((256*x+255.5)/(128<<z)-1)* L;
 			double tile_maxy = (1-(256*y-0.5)/(128<<z))* L;
 			delete tmp;
-			
 			if (tile_minx<maxx && tile_miny<maxy && tile_maxx>minx && tile_maxy> miny)//Filter out tiles that are not in the spatial scope of data MBRs
 			{
 				sprintf(key,"%s/%d/%d/%d",appid.c_str(),z,x,y);

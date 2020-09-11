@@ -59,7 +59,7 @@ The datasets (see Tab 1) used in the demonstration are provided by map service p
 
 [Geospatial Data Abstraction Library (GDAL)](http://www.gdal.org/) >=2.0 (recommended version 2.4.4)
 
-[libpng](http://www.libpng.org/pub/png//libpng.html) (recommended version 1.6.37)
+[libpng](http://www.libpng.org/pub/png//libpng.html) (recommended version 1.2.59)
 
 #### Compile:
 

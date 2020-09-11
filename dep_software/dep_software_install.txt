@@ -1,3 +1,4 @@
+
 $install redis
 wget http://download.redis.io/releases/redis-3.2.12.tar.gz
 tar -zxvf redis-3.2.12.tar.gz
@@ -24,7 +25,17 @@ cd boost_1_72_0
 ./bootstrap.sh --prefix=/usr/local
 ./b2 install --with=all
 
-$install gdal
+$install gdal(gdal is depended on geos and proj-4)
+wget -c http://download.osgeo.org/geos/geos-3.5.0.tar.bz2
+tar -jxvf geos-3.5.0.tar.bz2
+cd geos-3.5.0
+./configure
+make && make install
+wget -c http://download.osgeo.org/proj/proj-4.9.2.tar.gz
+tar -zxvf proj-4.9.2.tar.gz
+cd proj-4.9.2
+./configure
+make && make install
 wget -c http://download.osgeo.org/gdal/2.4.4/gdal-2.4.4.tar.gz 
 tar -zxvf gdal-2.4.4.tar.gz
 cd gdal-2.4.4
@@ -32,8 +43,8 @@ cd gdal-2.4.4
 make && make install
 
 $install libpng
-wget https://sourceforge.net/projects/libpng/files/libpng16/1.6.37/libpng-1.6.37.tar.gz
-tar -zxvf libpng-1.6.37.tar.gz
-cd libpng-1.6.37
+wget https://sourceforge.net/projects/libpng/files/libpng12/1.2.59/libpng-1.2.59.tar.gz
+tar -zxvf libpng-1.2.59.tar.gz
+cd libpng-1.2.59
 ./configure
 make && make install
