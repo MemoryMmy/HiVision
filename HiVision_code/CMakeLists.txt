@@ -7,7 +7,6 @@ project (hivision
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
-set(CMAKE_POLICY_DEFAULT_CMP0054 NEW)
 
 find_package(MPI REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
@@ -26,7 +25,7 @@ add_library(hivision
   src/vision.cpp
 )
 
-include_directories(${PROJECT_SOURCE_DIR}/include/ ${MPI_INCLUDE_PATH} ${PNG_INCLUDE_PATH} ${HIREDIS_INCLUDE_DIRS} ${BOOST_INCLUDE_DIRS})
+include_directories(${PROJECT_SOURCE_DIR}/include/ ${MPI_INCLUDE_PATH} ${PNG_INCLUDE_DIRS} ${GDAL_INCLUDE_DIRS} ${HIREDIS_INCLUDE_DIRS}  ${Boost_INCLUDE_DIRS})
 
 add_definitions(-std=c++11)
 ADD_DEFINITIONS(-Wall -O3)
