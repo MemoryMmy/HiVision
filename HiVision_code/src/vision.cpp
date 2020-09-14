@@ -9,10 +9,10 @@
  *
  */
 
-#include "ogrsf_frmts.h"
-#include "ogr_p.h"
-#include "cpl_conv.h"
-#include "cpl_string.h"
+#include <gdal/ogrsf_frmts.h>
+#include <gdal/ogr_p.h>
+#include <gdal/cpl_conv.h>
+#include <gdal/cpl_string.h>
 #include "Redis.h"
 #include <stdio.h>
 #include <cstring>
