@@ -135,7 +135,7 @@ void  LineVision( int z, int x, int y, char* indexPath, char *dataId, char *tile
 	sprintf( tmp, "%s%s", indexPath, dataId );
 	bi::managed_mapped_file file( bi::open_only, tmp );
 	rtree_segment_ptr = file.find<rtree_segment>( "rtree" ).first;
-#pragma omp parallel for num_threads(2)
+	#pragma omp parallel for num_threads(2)
 	for ( int i = 0; i < 256; i++ )
 	{
 		for ( int j = 0; j < 256; j++ )
@@ -208,7 +208,7 @@ void  PointVision( int z, int x, int y, char* indexPath, char *dataId, char *til
 	sprintf( tmp, "%s%s", indexPath, dataId );
 	bi::managed_mapped_file file( bi::open_only, tmp );
 	rtree_point_ptr = file.find<rtree_point>( "rtree" ).first;
-#pragma omp parallel for num_threads(2)
+	#pragma omp parallel for num_threads(2)
 	for ( int i = 0; i < 256; i++ )
 	{
 		for ( int j = 0; j < 256; j++ )
@@ -285,7 +285,7 @@ void  PologonVision( int z, int x, int y, char* indexPath, char *dataId, char *t
 	sprintf( tmp, "%s%s_mbr", indexPath, dataId );
 	bi::managed_mapped_file file_mbr( bi::open_only, tmp );
 	rtree_box_ptr = file_mbr.find<rtree_box>( "rtree" ).first;
-#pragma omp parallel for num_threads(2)
+	#pragma omp parallel for num_threads(2)
 	for ( int i = 0; i < 256; i++ )
 	{
 		for ( int j = 0; j < 256; j++ )
