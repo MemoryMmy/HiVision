@@ -130,7 +130,9 @@ Example:
 > http://localhost:10080/HiVision/abuildings/{R}/{G}/{B}/{A}/{z}/{x}/{y}.png
 > ```
 
+## Citation
 
+Ma M, Wu Y, Ouyang X, et al. HiVision: Rapid visualization of large-scale spatial vector data[J]. Computers & Geosciences, 2021, 147:104665.
 
 ## Contact
 
